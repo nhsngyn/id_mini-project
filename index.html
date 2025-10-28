@@ -144,7 +144,7 @@
           axisPointer: {           // ✦ 세로선 스타일
             show: true,
             lineStyle: {
-              color: '#8ab4f8',
+              color: '#2E2E34cc',
               width: 5,
               type: 'shadow',      // ← 세로선은 점선
               opacity: 0.3
@@ -155,7 +155,21 @@
               color: '#d7e2f2',
               borderRadius: 4,
               padding: [2, 6]
-            }
+            },
+            axisTick: {
+              show: true,
+              interval: (index) => day25Idx.has(index) // 25일만 눈금
+            },
+            axisLabel: {
+              color: '#7f8ea1',
+              interval: (index) => day25Idx.has(index), // 25일만 라벨
+              formatter: (val /* "YYYY-MM-DD" or "YYYY/MM/DD" */) => {
+                const parts = String(val).split(/[-/]/);
+                const m = parseInt(parts[1], 10);               // 1~12
+                const d = parseInt(parts[2], 10);               // 1~31
+                return `${d} ${MMM[m - 1] || ''}`;              // 예: "25 Sep"
+              }
+            },
           },
 
           splitLine: { show: false },
