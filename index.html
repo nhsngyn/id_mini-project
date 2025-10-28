@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="ko">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Price & Volume</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- ECharts -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head>
+
+<body class="bg-[#2E2E34cc] text-slate-200 font-sans">
+  <div class="max-w-[1920px] mx-auto p-4 bg-[#21252C]">
+    <!-- 상단 바 -->
+    <div class="flex flex-col gap-2 mb-3">
+      <h1 class="text-lg font-semibold">Price &amp; Volume</h1>
+    </div>
+
+    <!-- 차트 패널 -->
+    <div class="bg-[#0d1014] border border-[#1b1f24] rounded-xl px-3 shadow-inner">
+      <!-- 드롭다운 + 오른쪽 배지 -->
+      <div class="max-w-[1920px] max-h-[1080px] flex items-center justify-between">
+        <!-- 왼쪽: Asset 선택 -->
+        <div class="relative w-48">
+          <select id="asset" class="peer appearance-none w-full bg-[#181c21] text-[#474F59] border border-[#2b323a] rounded-xl
+                 px-3 pr-8 py-2 cursor-pointer text-sm shadow-sm
+                 hover:border-[#3a434e] focus:outline-none focus:ring-2 focus:ring-emerald-500/40
+                 focus:border-emerald-400/40">
+            <option value="mantra">Mantra</option>
+            <option value="bitcoin">Bitcoin</option>
+            <option value="ethereum">Ethereum</option>
+          </select>
+          <!-- 오른쪽 화살표 아이콘 (이미지) -->
+          <img src="img copy/icn_arrow_btm_24.svg" alt="arrow icon" class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4
+                      opacity-70 transition-all duration-200
+                      peer-focus:opacity-100 peer-focus:scale-110" />
+        </div>
+
+        <!-- 오른쪽: 배지 영역 (interval + range) -->
+        <div class="flex items-center py-2">
+          <div class="bg-[#181c21]/70 border border-white/10 rounded-xl px-5 py-3
+                 shadow-[0_0_0_1px_rgba(255,255,255,0.06)_inset] backdrop-blur
+                 text-slate-300">
+            <div class="flex items-center gap-3 mb-3">
+              <img src="img copy/icn_candle_16.svg" alt="chart icon" class="h-6 w-6 opacity-70" />
+              <div class="text-[15px] leading-tight">
+                <span style="color:#474F59">Interval</span>
+                <span class="ml-2 font-semibold" style="color:#474F59" id="badge-interval">1 Day</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <img src="img copy/icn_range_16.svg" alt="range icon" class="h-6 w-6 opacity-70" />
+              <div class="text-[15px] leading-tight">
+                <span style="color:#474F59">Range</span>
+                <span class="ml-2 font-semibold" style="color:#474F59" id="badge-range">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 차트 -->
+      <div id="chart" class="h-[600px] w-full"></div>
+    </div>
+  </div>
+
+  <!-- (선택) JSON을 여기에 직접 넣어도 됩니다. 없으면 window.rawData/파일로드를 시도합니다.
+  <script type="application/json" id="ohlcv">[[ "2025-10-16",0.1328,0.1356,0.1290,0.1490,124726250 ], ... ]</script>
+  -->
+
+  <script>
+    const upColor = '#0FA76C';   // 네가 쓰던 상승색
+    const downColor = '#C93C50'; // 네가 쓰던 하락색
+
+    // ----- 유틸: 데이터 파싱 & 분해 -----
+    function readInlineJSON() {
+      const el = document.getElementById('ohlcv');
+      if (!el) return null;
+      try {
+        const txt = el.textContent.trim();
+        if (!txt) return null;
+        return JSON.parse(txt);
+      } catch (e) {
+        console.error('JSON 파싱 실패(ohlcv):', e);
+        return null;
+      }
+    }
+
+    // 스키마 자동감지: A=[d,o,h,l,c,v], B=[d,o,c,l,h,v]
+    function detectSchema(rows) {
+      const n = Math.min(12, rows.length);
+      let looksA = 0, looksB = 0;
+      for (let i = 0; i < n; i++) {
+        const r = rows[i]; if (!r || r.length < 6) continue;
+        const o = +r[1], a = +r[2], b = +r[3], c = +r[4];
+        if (a >= o && a >= c && b <= o && b <= c) looksA++; // A: a=high, b=low, c=close
+        if (c >= o && c >= a && b <= o && b <= a) looksB++; // B: a=close, b=low, c=high
+      }
+      return looksA >= looksB ? 'A' : 'B';
+    }
+
+    // 날짜 오름차순(오래된→최신) 정렬 보장
+    function ensureAscendingByDate(raw) {
+      return [...raw].sort((a, b) => {
+        const da = new Date(a[0]).getTime();
+        const db = new Date(b[0]).getTime();
+        return da - db;
+      });
+    }
+
+    /** rawData: 스키마 A 또는 B */
+    function splitData(rawData) {
+      const categoryData = [], values = [], volumes = [];
+      if (!Array.isArray(rawData) || rawData.length === 0) return { categoryData, values, volumes };
+
+      const asc = ensureAscendingByDate(rawData);
+      const schema = detectSchema(asc); // 'A' | 'B'
+
+      for (let i = 0; i < asc.length; i++) {
+        const row = asc[i];
+        if (!row || row.length < 6) continue;
+
+        const date = String(row[0]);
+        const open = Number(row[1]);
+        const close = Number(row[2]);
+        const low = Number(row[3]);
+        const high = Number(row[4]);
+        const vol = Number(row[5]);
+
+        // 데이터 원본 값 그대로
+        categoryData.push(date);
+        values.push([open, close, low, high]); // ECharts 순서 유지
+        const dir = open > close ? 1 : -1; // 방향 판단
+        volumes.push([i, vol, dir]);
+      }
+      return { categoryData, values, volumes };
+    }
+
+    // ----- 차트 옵션 -----
+    function buildOption(data) {
+      return {
+        backgroundColor: 'transparent',
+        animation: false,
+        grid: [
+          { left: '6%', right: '5%', top: 20, height: '58%' },
+          { left: '6%', right: '5%', top: '68%', height: '22%' }
+        ],
+
+        // 축 배지(말풍선) + 십자선
+        axisPointer: {
+          type: 'cross',
+          snap: true,
+          lineStyle: { color: 'rgba(255,255,255,0.45)', width: 1, type: 'dashed' },
+          label: {
+            show: true,
+            backgroundColor: 'rgba(61,66,77,0.95)',
+            color: '#E6EBF2',
+            borderColor: 'rgba(255,255,255,0.08)',
+            borderWidth: 1,
+            borderRadius: 10,
+            padding: [6, 10],
+            shadowBlur: 10,
+            shadowColor: 'rgba(0,0,0,0.35)',
+            formatter: function (obj) {
+              if (obj.axisDimension === 'x') return String(obj.value || '');
+              const n = Number(obj.value);
+              return isFinite(n) ? n.toFixed(4) : obj.value;
+            }
+          }
+        },
+
+        // price + volumes 축
+        xAxis: [
+          {
+            type: 'category',
+            data: data.categoryData,
+            boundaryGap: true,
+            axisLine: { lineStyle: { color: '#2b323a' } },
+            axisLabel: { color: '#7f8ea1' },
+            splitLine: { show: false },
+            min: 'dataMin',
+            max: 'dataMax'
+          },
+          // volumes xAxis
+          {
+            type: 'category',
+            gridIndex: 1,
+            data: data.categoryData,
+            boundaryGap: true,
+            axisLine: { lineStyle: { color: '#2b323a' } },
+            axisTick: { show: false },
+            axisLabel: { show: false },
+            splitLine: { show: false },
+            min: 'dataMin',
+            max: 'dataMax'
+          }
+        ],
+        yAxis: [
+          {
+            scale: true,
+            /* 네가 임의 고정하려면 아래 두 줄 유지/수정
+            min: 0,
+            max: 0.18,
+            */
+            axisLine: { show: false },
+            axisTick: { show: false },
+            axisLabel: { color: '#7f8ea1' },
+            splitLine: { lineStyle: { color: '#1e242b' } },
+            splitArea: { show: false }
+          },
+          {
+            scale: true,
+            gridIndex: 1,
+            axisLine: { show: false },
+            axisTick: { show: false },
+            axisLabel: { show: false },
+            splitLine: { show: false }
+          }
+        ],
+
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: { type: 'cross' },
+          backgroundColor: 'rgba(46,46,52,0.1)',
+          borderWidth: 0,
+          padding: 0,
+          formatter: function (params) {
+            const k = params.find(p => p.seriesType === 'candlestick'); // 캔들스틱 데이터
+            if (!k) return ''; // 안전장치
+
+            const [open, close, high, low] = k.data.map(Number);   // 숫자 변환
+            const isUp = close >= open; // 상승/하락 여부
+            const valColor = isUp ? upColor : downColor; // 색상 선택
+            const fmt = v => (v == null ? '-' : Number(v).toFixed(3)); // 소수점 3자리
+
+            const label = k.axisValueLabel || k.name || '';   // 날짜 문자열
+            const parts = String(label).split(/[ T]/); // 날짜와 시간 분리
+            const dateStr = parts[0] || '';
+            const timeStr = parts[1] ? parts[1].slice(0, 5) : '09:00'; // 시간 없으면 기본값
+
+            // 군더더기 없이 숫자만 색상 적용
+            return `
+  <div class="min-w-[220px] rounded-xl bg-[#2b2f34]/90 p-4 text-gray-100 shadow-xl ring-1 ring-white/10">
+    <div class="flex justify-between mb-2 text-gray-400 text-sm font-semibold">
+      <span>${dateStr}</span><span>${timeStr}</span>
+    </div>
+    <div class="grid grid-cols-2 gap-y-1.5 text-sm font-bold">
+      <span>OPEN</span><span class="text-right" style="color:${valColor}">${fmt(open)}</span>
+      <span>HIGH</span><span class="text-right" style="color:${valColor}">${fmt(high)}</span>
+      <span>LOW</span><span class="text-right" style="color:${valColor}">${fmt(low)}</span>
+      <span>CLOSE</span><span class="text-right" style="color:${valColor}">${fmt(close)}</span>
+    </div>
+  </div>`;
+          }
+        },
+
+        dataZoom: [
+          { type: 'inside', xAxisIndex: [0, 1], start: 40, end: 100 },
+          {
+            type: 'slider', xAxisIndex: [0, 1], top: '93%', height: 16,
+            brushSelect: false, handleSize: '80%', borderColor: '#1f2a37',
+            backgroundColor: '#111418',
+            dataBackground: { lineStyle: { color: '#273341' }, areaStyle: { color: '#17202a' } },
+            fillerColor: 'rgba(83,120,175,0.25)', textStyle: { color: '#7b8ea3' }
+          }
+        ],
+        visualMap: {
+          show: false,
+          seriesIndex: 1,
+          dimension: 2, // volumes: [i, volume, dir]
+          pieces: [
+            { value: 1, color: downColor }, // 1 → 하락(빨강)
+            { value: -1, color: upColor }   // -1 → 상승(초록)
+          ]
+        },
+
+        series: [
+          {
+            name: 'Price',
+            type: 'candlestick',
+            data: data.values,
+            itemStyle: {
+              color: upColor,
+              color0: downColor,
+              borderColor: upColor,
+              borderColor0: downColor
+            }
+          },
+          {
+            name: 'Volume',
+            type: 'bar',
+            xAxisIndex: 1,
+            yAxisIndex: 1,
+            data: data.volumes,       // [index, volume, dir]
+            barWidth: '60%',
+            itemStyle: { opacity: 0.85 }
+          }
+        ]
+      };
+    }
+
+    // ----- 배지 업데이트 -----
+    function updateBadges(categoryData) {
+      const fmt = (ds) => {
+        const [y, m, d] = String(ds).split('-');
+        return m && d ? `${m}/${d}` : ds;
+      };
+      const days = categoryData.length;
+      const first = categoryData[0];
+      const last = categoryData[days - 1];
+      document.getElementById('badge-interval').textContent = '1 Day';
+      document.getElementById('badge-range').textContent =
+        days ? `${days} Days (${fmt(first)}–${fmt(last)})` : '—';
+    }
+
+    // ----- fetch 유틸 -----
+    async function loadJSON(url) {
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } catch (e) {
+        console.warn('fetch 실패:', url, e);
+        return null;
+      }
+    }
+
+    // ----- 차트 초기화 -----
+    const chart = echarts.init(document.getElementById('chart'), null, { renderer: 'canvas' });
+
+    // ----- 부트스트랩: 데이터 주입 경로 -----
+    async function boot(preferredFile) {
+      let raw = readInlineJSON();                        // 1) inline
+      if (!raw && Array.isArray(window.rawData)) raw = window.rawData; // 2) 전역
+      if (!raw) {                                       // 3) 파일
+        const candidate = preferredFile || 'mantra_60days.json';
+        raw = await loadJSON(candidate);
+      }
+
+      if (!raw || !Array.isArray(raw) || raw.length === 0) {
+        const toast = document.createElement('div');
+        toast.textContent = '데이터가 없습니다. window.rawData, #ohlcv, 또는 JSON 파일(mantra_60days.json)을 주입하세요.';
+        toast.className = 'fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-md bg-red-500/90 text-white text-sm shadow';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+        return;
+      }
+
+      const parsed = splitData(raw);                    // << 날짜 오름차순 보장 + 스키마 감지
+      chart.setOption(buildOption(parsed), true);
+      updateBadges(parsed.categoryData);
+
+      // 디버그(원하면 살려서 데이터 확인)
+      // console.log('RAW first:', raw.slice(0,3));
+      // console.log('PARSED values [o,c,l,h]:', parsed.values.slice(0,3));
+      // console.log('PARSED volumes [i,v,dir]:', parsed.volumes.slice(0,3));
+    }
+
+    // 드롭다운으로 파일 전환 (옵션: mantra/bitcoin/ethereum 선택 시 `${asset}_60days.json` 로드)
+    document.getElementById('asset').addEventListener('change', async (e) => {
+      const asset = e.target.value; // 'mantra' | 'bitcoin' | 'ethereum'
+      await boot(`${asset}_60days.json`);
+    });
+
+    // 최초 실행 (기본: mantra_60days.json)
+    boot();
+
+    window.addEventListener('resize', () => chart.resize());
+  </script>
+</body>
+
+</html>
