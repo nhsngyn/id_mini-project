@@ -13,20 +13,6 @@
   const SLIDER_H = 16;     // (지금은 dataZoom 비활성이라 높이에만 반영 안 해도 OK)
   const SLIDER_GAP = 10;
 
-
-// 파일 최상단 IIFE 안(상수들 아래)에 추가
-let __currIdx = 0;          // 커서가 가리키는 X 인덱스
-let __volumesRef = null;    // 거래량 배열 참조
-
-function fmtVol(n){
-  if (!Number.isFinite(n)) return '—';
-  if (n >= 1e9) return (n/1e9).toFixed(1)+'B';
-  if (n >= 1e6) return (n/1e6).toFixed(0)+'M';
-  if (n >= 1e3) return (n/1e3).toFixed(0)+'K';
-  return String(n);
-}
-
-
   // ----- 데이터 로드 -----
   async function loadJSON(url) {
     try {
@@ -88,126 +74,104 @@ function fmtVol(n){
     return {
       backgroundColor: 'transparent',
       animation: false,
-      axisPointer: {
-  show: false,                      // 전역 표시 X
-  link: [{ xAxisIndex: [0, 1] }],   // ✅ 두 그리드 x축 연동
-},
+      axisPointer: { link: [{ xAxisIndex: [0, 1] }] },
 
-grid: [
-  { left: 128, right: 24, top: priceTop,  height: priceHeight,  containLabel: true },
-  { left: 128, right: 24, top: volumeTop, height: volumeHeight, containLabel: true }
-],
+      grid: [
+        { left: '6%', right: '5%', top: priceTop,  height: priceHeight, containLabel: true  }, // 픽셀 고정 쓰려면 left: GRID_L, right: GRID_R
+        { left: '6%', right: '5%', top: volumeTop, height: volumeHeight, containLabel: true }
+      ],
 
-
-   xAxis: [
-  {
-    type: 'category',
-    data: data.categoryData,
-    boundaryGap: true,
-    min: 'dataMin', max: 'dataMax',
-    axisLine: { lineStyle: { color: '#2b323a' } },
-    axisTick: { show: false },
-    axisLabel: { show: false },
-    axisPointer: {
-      show: true,
-      type: 'shadow',
-      label: { show: false },
-      shadowStyle: { color: hoverBand }
+      xAxis: [
+        {
+          type: 'category',
+          data: data.categoryData,
+          boundaryGap: true,
+          min: 'dataMin', max: 'dataMax',
+          axisLine: { lineStyle: { color: '#2b323a' } },
+          axisTick: { show: false },
+          axisLabel: { show: false },
+          axisPointer: {
+            show: true, type: 'shadow',
+            label: { show: false },
+            lineStyle: { color: hoverBand, width: 10, opacity: .6 },
+            shadowStyle: { color: hoverBand }
+          },
+          splitLine: { show: false }
+        },
+        {
+          type: 'category',
+          gridIndex: 1,
+          data: data.categoryData,
+          boundaryGap: true,
+          min: 'dataMin', max: 'dataMax',
+          axisLine: { lineStyle: { color: '#2b323a' } },
+          axisTick: { show: false },
+          axisLabel: {
+    show: true,
+    color: '#7f8ea1',
+    interval: function (index, value) {
+      // 7일 간격마다 표시
+      return index % 7 === 0;
     },
-  },
-  {
-    type: 'category',
-    gridIndex: 1,
-    data: data.categoryData,
-    boundaryGap: true,
-    min: 'dataMin', max: 'dataMax',
-    axisLine: { lineStyle: { color: '#2b323a' } },
-    axisTick: { show: false },
-    axisLabel: {
-      show: true,
-      color: '#7f8ea1',
-      interval: idx => idx % 7 === 0,
-      formatter: (val) => {
-        const [y,m,d] = String(val).split(/[-/]/);
-        const MMM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        return `${(+d)||d}${MMM[(+m||1)-1]||''}`; // 18Sep
-      }
-    },
-    axisPointer: {
-      show: true,
-      type: 'shadow',
-      label: { show: false },
-      shadowStyle: { color: hoverBand }
-    },
-    splitLine: { show: false }
-  }
-],
-
-
-
-  yAxis: [
-  { // price y
-       position: 'left',
-    scale: true,
-    axisPointer: {
-      show: true,
-      type: 'line',
-      z: 50,
-      lineStyle: { color: 'rgba(0,0,0,0)', width: 0 }, // 수평선 숨김
-      label: {
-        show: true, padding: [1,6], margin: 2,
-        color: '#D6E6F8', fontFamily: 'Poppins', fontSize: 14, fontWeight: 500,
-        backgroundColor: 'rgba(34,39,47,0.10)', borderColor: '#6D89AB',
-        borderWidth: 1, borderRadius: 4,
-        formatter: ({ value }) => Number.isFinite(+value) ? (+value).toFixed(3) : value
-      }
-    },
-    axisLine: { show: false }, axisTick: { show: false },
-    axisLabel: {
-      color: '#7f8ea1',
-      formatter: v => (+v >= 1 ? (+v).toFixed(2) : (+v).toFixed(3))
-    },
-    splitLine: { lineStyle: { color: '#1e242b', type: 'dashed' } }
-  },
-  { // volume y
-      gridIndex: 1, position: 'left', scale: true,
-    axisPointer: {
-      show: true, type: 'line', z: 50,
-      lineStyle: { color: 'rgba(0,0,0,0)', width: 0 },
-      label: {
-        show: true, padding:[1,6], margin:2, fontSize:14,
-        color:'#D6E6F8', fontFamily:'Poppins', fontWeight:500,
-        backgroundColor:'rgba(34,39,47,0.10)', borderColor:'#6D89AB',
-        borderWidth:1, borderRadius:4,
-        formatter: ({ value }) => {
-          const n = +value;
-          if (!Number.isFinite(n)) return '—';
-          if (n >= 1e9) return (n/1e9).toFixed(1)+'B';
-          if (n >= 1e6) return (n/1e6).toFixed(0)+'M';
-          if (n >= 1e3) return (n/1e3).toFixed(0)+'K';
-          return String(n|0);
+    formatter: (val) => {
+      const [y,m,d] = String(val).split(/[-/]/);
+      const MMM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${d} ${MMM[(+m||1)-1]||''}`;
+    }
+          },
+          axisPointer: {
+            show: true, type: 'shadow',
+            label: { show: false },
+            lineStyle: { color: hoverBand, width: 10, opacity: .6 },
+            shadowStyle: { color: hoverBand }
+          },
+          splitLine: { show: false }
         }
+      ],
+
+      yAxis: [
+        {
+          scale: true,
+              axisPointer: {
+      show: true,
+      label: {
+        show: true,
+        padding: [2, 8],
+        color: '#E4E6ED',                        // var(--gray100)
+        backgroundColor: 'rgba(34,39,47,0.10)',  // var(--gray-10)
+        borderColor: '#6D89AB',                  // var(--blue300)
+        borderWidth: 1,
+        borderRadius: 4,
+        margin: 6,
+        formatter: ({ value }) =>
+          Number.isFinite(+value) ? (+value).toFixed(3) : value
       }
     },
-    axisLine: { show: false }, axisTick: { show: false },
-    axisLabel: {
-      color: '#7f8ea1',
-      formatter: v => v>=1e9 ? (v/1e9).toFixed(1)+'B'
-               : v>=1e6 ? (v/1e6).toFixed(0)+'M'
-               : v>=1e3 ? (v/1e3).toFixed(0)+'K'
-               : (v|0)
-    },
-    splitLine: { lineStyle: { color: '#1e242b', type: 'dashed' } }
-  }
-],
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { color: '#7f8ea1' },
+          splitLine: { lineStyle: { color: '#1e242b', type: 'dashed' } }
+        },
+        {
+          scale: true, gridIndex: 1,
+          axisPointer: { show: false }, 
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: {
+            color: '#7f8ea1',
+            formatter: (v) => v>=1e9 ? (v/1e9).toFixed(1)+'B'
+              : v>=1e6 ? (v/1e6).toFixed(0)+'M'
+              : v>=1e3 ? (v/1e3).toFixed(0)+'K' : v
+          },
+          splitLine: { lineStyle: { color: '#1e242b', type: 'dashed' } }
+        }
+      ],
 
-
-
-      // 호버 카드 (상승=초록, 하락=빨강, VOLUME 포함)
+      // ✅ 호버 카드 (상승=초록, 하락=빨강, VOLUME 포함)
     tooltip: {
   trigger: 'axis',
   confine: true,                  // 가장자리 잘림 방지
-  axisPointer: { show: false },
+  axisPointer: { type: 'cross', snap: true },
   backgroundColor: 'transparent', // 카드 자체를 HTML로 그림
   borderWidth: 0,
   padding: 0,
@@ -292,47 +256,34 @@ grid: [
 },
 
 
-      // 스크롤/슬라이더/휠줌 모두 비활성화
+      // ✅ 스크롤/슬라이더/휠줌 모두 비활성화
       dataZoom: [],
 
-   series: [
-  {
-    id: 'price',
-    name: 'Price',
-    type: 'candlestick',
-    data: data.values,
-    itemStyle:{ color: upColor, borderColor: upColor, color0: downColor, borderColor0: downColor },
-    markLine: {
+      series: [
+        {
+          id:'price', name:'Price', type:'candlestick', data:data.values,
+          itemStyle:{ color: upColor, borderColor: upColor, color0: downColor, borderColor0: downColor },
+          markLine: {
       symbol: 'none',
       label: { show: false },
       lineStyle: { color: '#3A3F46', type: 'dashed', width: 1 },
-      data: [] // 호버 때 채움
+      data: []   // ← 처음엔 비워둠, 호버 시 채움
     }
-  },
-  {
-    id: 'volume',
-    name: 'Volume',
-    type: 'bar',
-    xAxisIndex: 1, yAxisIndex: 1,
-    data: data.volumes,
-    barWidth: '60%',
-    itemStyle:{
-      opacity:.85,
-      color: p => (data.dirs[p.dataIndex] === 1 ? downColor : upColor)
-    },
-    markLine: {                       // ✅ 추가
-      symbol: 'none',
-      label: { show: false },
-      lineStyle: { color: '#3A3F46', type: 'dashed', width: 1 },
-      data: []
-    }
-  }
-]
-
+        },
+         
+        {
+          name:'Volume', type:'bar', xAxisIndex:1, yAxisIndex:1,
+          data: data.volumes, barWidth:'60%',
+          itemStyle:{
+            opacity:.85,
+            color: (p) => (data.dirs[p.dataIndex] === 1 ? downColor : upColor)
+          }
+        }
+      ]
     };
   }
 
-  // ----- 배지 업데이트 -----
+  // ----- 배지 업데이트(선택) -----
   function updateBadges(categoryData) {
     const elInt = document.getElementById('badge-interval');
     const elRng = document.getElementById('badge-range');
@@ -375,75 +326,70 @@ grid: [
     raw.sort((a, b) => new Date(a[0]) - new Date(b[0]));
 
     const parsed = splitData(raw);
-    __volumesRef = parsed.volumes;
     const chart = echarts.init(el, null, { renderer: 'canvas' });
 
     // ✅ 내부 넘침 차단(툴팁 drop-shadow 등)
     const dom = chart.getDom();
-    dom.style.overflow = 'visible';
+    dom.style.overflow = 'hidden';
     dom.style.maxWidth = '100%';
 
     // 옵션 적용
     chart.setOption(buildOption(parsed, rect.width), true);
     updateBadges(parsed.categoryData);
 
+    // 점선(High) 표시용 markLine은 이미 series.price에 선언되어 있음(data: []).
 
-// 업데이트 시 할 일
+// 업데이트 시 두 가지를 한다:
+// 1) 막대 폭에 맞춰 세로 밴드 두께 보정
+// 2) y배지/점선을 '해당 캔들의 High'에 고정
 let syncing = false;
 
 chart.off('updateAxisPointer');
 chart.on('updateAxisPointer', (e) => {
-  const axesInfo = e && e.axesInfo || [];
+  // (1) 세로 밴드 두께 보정
+  const xAxisModel = chart.getModel().getComponent('xAxis', 0);
+  if (xAxisModel) {
+    const idxExtent = xAxisModel.axis.scale.getExtent();
+    const pxExtent  = xAxisModel.axis.getExtent();
+    const barW = Math.max(
+      6,
+      Math.min(20, Math.abs(pxExtent[1] - pxExtent[0]) / Math.max(1, idxExtent[1] - idxExtent[0]))
+    );
+    chart.setOption({ xAxis: [{ axisPointer: { lineStyle: { width: barW } } }] }, false);
+  }
 
-  // ✅ 어떤 x축(0 또는 1)에서 오든 첫 번째 x축 정보를 사용
- const xInfo = (e && e.axesInfo || []).find(a => a.axisDim === 'x');
+  // (2) y배지/점선 고정
+  if (syncing) return;
+  const axesInfo = (e && e.axesInfo) || [];
+  const xInfo = axesInfo.find(a => a.axisDim === 'x' && a.axisIndex === 0);
   if (!xInfo) return;
 
-  const xValRaw = xInfo.value;
-  const idx = (typeof xValRaw === 'number')
-    ? xValRaw
-    : parsed.categoryData.indexOf(String(xValRaw));
-  if (idx < 0) return;
-
-  const k = parsed.values[idx];          
+  const idx = xInfo.value;                  // 현재 호버 인덱스
+  const k   = parsed.values[idx];           // [open, close, low, high]
   if (!k) return;
+
   const high = k[3];
-  const vol  = parsed.volumes[idx];
-  const xCat = parsed.categoryData[idx];
 
-  // 두 패널 각각 점선 갱신
+  // 점선 라인을 High에 고정
   chart.setOption({
-    series: [
-      { id: 'price',  markLine: { data: [{ yAxis: high }] } },
-      { id: 'volume', markLine: { data: [{ yAxis: vol  }] } }
-    ]
+    series: [{ id: 'price', markLine: { data: [{ yAxis: high }] } }]
   }, false);
 
-  // ✅ 두 x축 모두 같은 카테고리로, 두 y축 배지 값도 동시에 갱신
- chart.dispatchAction({
+  // y배지 위치도 High로 강제 스냅
+  const xPx = chart.convertToPixel({ xAxisIndex: 0 }, idx);
+  const yPx = chart.convertToPixel({ gridIndex: 0, yAxisIndex: 0 }, high);
+
+  syncing = true;
+  chart.dispatchAction({
     type: 'updateAxisPointer',
-    axesInfo: [
-      { axisDim: 'x', axisIndex: 0, value: xCat },
-      { axisDim: 'x', axisIndex: 1, value: xCat },
-      { axisDim: 'y', axisIndex: 0, value: high },
-      { axisDim: 'y', axisIndex: 1, value: vol  }
-    ]
+    currTrigger: 'mousemove',
+    x: xPx,
+    y: yPx
   });
+  syncing = false;
 });
 
-
-// 차트 밖으로 나가면 점선 제거
-chart.getZr().off('mouseout');
-chart.getZr().on('mouseout', () => {
-  chart.setOption({
-    series: [
-      { id: 'price',  markLine: { data: [] } },
-      { id: 'volume', markLine: { data: [] } }
-    ]
-  }, false);
-});
-
-// 차트 밖으로 나가면 점선 제거
+// (선택) 차트 밖으로 나가면 점선 제거
 chart.getZr().off('mouseout');
 chart.getZr().on('mouseout', () => {
   chart.setOption({ series: [{ id: 'price', markLine: { data: [] } }] }, false);
