@@ -19,6 +19,14 @@
   --down:#F76E6E;
   --hover-band: rgba(55,60,66,0.30);
 
+    --green_light:#4FF68C;
+  --red_light:#FF3B52;
+  --gray100:#E4E6ED;
+  --gray300:#818D9C;
+  --gray-80: rgba(46,46,52,0.80);
+  --blue300:#6D89AB;
+
+
 }
 
 .sr-only {

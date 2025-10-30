@@ -69,12 +69,6 @@
     const priceHeight = PRICE_H;
     const volumeTop = priceTop + priceHeight + GAP;
     const volumeHeight = VOLUME_H;
-
-    // 퍼센트 → 소수점 반올림으로 넘침이 생길 수 있어 픽셀로도 계산 가능
-    // 필요 시 아래 두 줄을 주석 해제해서 픽셀 고정으로 사용해도 돼.
-    // const GRID_L = Math.round(elWidth * 0.06);
-    // const GRID_R = Math.round(elWidth * 0.05);
-
     const MMM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     return {
@@ -83,8 +77,8 @@
       axisPointer: { link: [{ xAxisIndex: [0, 1] }] },
 
       grid: [
-        { left: '6%', right: '5%', top: priceTop,  height: priceHeight  }, // 픽셀 고정 쓰려면 left: GRID_L, right: GRID_R
-        { left: '6%', right: '5%', top: volumeTop, height: volumeHeight }
+        { left: '6%', right: '5%', top: priceTop,  height: priceHeight, containLabel: true  }, // 픽셀 고정 쓰려면 left: GRID_L, right: GRID_R
+        { left: '6%', right: '5%', top: volumeTop, height: volumeHeight, containLabel: true }
       ],
 
       xAxis: [
@@ -138,6 +132,21 @@
       yAxis: [
         {
           scale: true,
+              axisPointer: {
+      show: true,
+      label: {
+        show: true,
+        padding: [2, 8],
+        color: '#E4E6ED',                        // var(--gray100)
+        backgroundColor: 'rgba(34,39,47,0.10)',  // var(--gray-10)
+        borderColor: '#6D89AB',                  // var(--blue300)
+        borderWidth: 1,
+        borderRadius: 4,
+        margin: 6,
+        formatter: ({ value }) =>
+          Number.isFinite(+value) ? (+value).toFixed(3) : value
+      }
+    },
           axisLine: { show: false },
           axisTick: { show: false },
           axisLabel: { color: '#7f8ea1' },
@@ -145,6 +154,7 @@
         },
         {
           scale: true, gridIndex: 1,
+          axisPointer: { show: false }, 
           axisLine: { show: false },
           axisTick: { show: false },
           axisLabel: {
@@ -173,7 +183,7 @@
     const [open, close, low, high] = k.data.map(Number);
     const volume = v ? Number(v.data) : null;
     const isUp = close >= open;
-    const valColor = isUp ? 'var(--green_light, #4FF68C)' : 'var(--red_light, #FF3B52);';
+    const valColor = isUp ? 'var(--green_light, #4FF68C)' : 'var(--red_light, #FF3B52)';
 
     const fmt    = n => (Number.isFinite(n) ? n.toFixed(3) : '-');
     const fmtVol = n => {
@@ -185,7 +195,8 @@
     };
 
     const label = k.axisValueLabel || k.axisValue || '';
-    const [dateStr, timeStrFull] = String(label).split(/[ T]/);
+    const [dateStrRaw, timeStrFull] = String(label).split(/[ T]/);
+     const dateStr = dateStrRaw ? dateStrRaw.replace(/-/g,'/') : ''; // ✅ YYYY/MM/DD 고정
     const timeStr = timeStrFull ? timeStrFull.slice(0,5) : '09:00';
 
     // 공통 행 컴포넌트: 좌 라벨, 우 값
@@ -207,7 +218,7 @@
   background: var(--gray-80, rgba(46,46,52,0.80));
   backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
 ">
-  <!-- 날짜 / 시간 -->
+  <!-- 날짜 / 시간 --> 
   <div style="display:flex; width:100%; justify-content:space-between; align-items:center;
               color:var(--gray300,#818D9C);
               font-family:Poppins; font-size:12px; font-weight:400; line-height:normal; letter-spacing:0.24px;">
@@ -251,8 +262,15 @@
       series: [
         {
           id:'price', name:'Price', type:'candlestick', data:data.values,
-          itemStyle:{ color: upColor, borderColor: upColor, color0: downColor, borderColor0: downColor }
+          itemStyle:{ color: upColor, borderColor: upColor, color0: downColor, borderColor0: downColor },
+          markLine: {
+      symbol: 'none',
+      label: { show: false },
+      lineStyle: { color: '#3A3F46', type: 'dashed', width: 1 },
+      data: []   // ← 처음엔 비워둠, 호버 시 채움
+    }
         },
+         
         {
           name:'Volume', type:'bar', xAxisIndex:1, yAxisIndex:1,
           data: data.volumes, barWidth:'60%',
@@ -319,17 +337,63 @@
     chart.setOption(buildOption(parsed, rect.width), true);
     updateBadges(parsed.categoryData);
 
-    // 캔들 폭에 맞춰 밴드 두께 보정
-    chart.on('updateAxisPointer', () => {
-      const xAxisModel = chart.getModel().getComponent('xAxis', 0);
-      if (!xAxisModel) return;
-      const idxExtent = xAxisModel.axis.scale.getExtent();
-      const pxExtent  = xAxisModel.axis.getExtent();
-      const pixelW    = Math.abs(pxExtent[1] - pxExtent[0]);
-      const count     = Math.max(1, idxExtent[1] - idxExtent[0]);
-      const barW      = Math.max(6, Math.min(20, pixelW / count));
-      chart.setOption({ xAxis: [{ axisPointer: { lineStyle: { width: barW } } }] }, false);
-    });
+    // 점선(High) 표시용 markLine은 이미 series.price에 선언되어 있음(data: []).
+
+// 업데이트 시 두 가지를 한다:
+// 1) 막대 폭에 맞춰 세로 밴드 두께 보정
+// 2) y배지/점선을 '해당 캔들의 High'에 고정
+let syncing = false;
+
+chart.off('updateAxisPointer');
+chart.on('updateAxisPointer', (e) => {
+  // (1) 세로 밴드 두께 보정
+  const xAxisModel = chart.getModel().getComponent('xAxis', 0);
+  if (xAxisModel) {
+    const idxExtent = xAxisModel.axis.scale.getExtent();
+    const pxExtent  = xAxisModel.axis.getExtent();
+    const barW = Math.max(
+      6,
+      Math.min(20, Math.abs(pxExtent[1] - pxExtent[0]) / Math.max(1, idxExtent[1] - idxExtent[0]))
+    );
+    chart.setOption({ xAxis: [{ axisPointer: { lineStyle: { width: barW } } }] }, false);
+  }
+
+  // (2) y배지/점선 고정
+  if (syncing) return;
+  const axesInfo = (e && e.axesInfo) || [];
+  const xInfo = axesInfo.find(a => a.axisDim === 'x' && a.axisIndex === 0);
+  if (!xInfo) return;
+
+  const idx = xInfo.value;                  // 현재 호버 인덱스
+  const k   = parsed.values[idx];           // [open, close, low, high]
+  if (!k) return;
+
+  const high = k[3];
+
+  // 점선 라인을 High에 고정
+  chart.setOption({
+    series: [{ id: 'price', markLine: { data: [{ yAxis: high }] } }]
+  }, false);
+
+  // y배지 위치도 High로 강제 스냅
+  const xPx = chart.convertToPixel({ xAxisIndex: 0 }, idx);
+  const yPx = chart.convertToPixel({ gridIndex: 0, yAxisIndex: 0 }, high);
+
+  syncing = true;
+  chart.dispatchAction({
+    type: 'updateAxisPointer',
+    currTrigger: 'mousemove',
+    x: xPx,
+    y: yPx
+  });
+  syncing = false;
+});
+
+// (선택) 차트 밖으로 나가면 점선 제거
+chart.getZr().off('mouseout');
+chart.getZr().on('mouseout', () => {
+  chart.setOption({ series: [{ id: 'price', markLine: { data: [] } }] }, false);
+});
 
     let t;
     window.addEventListener('resize', () => {
