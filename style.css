@@ -203,14 +203,16 @@ main{
   overflow:auto;
 }
 
+.chart-area, #chart, #chart > div { overflow: visible !important; }
 
 /* 상·하 그래프 사이 1px 간격 + 가운데 정렬 */
 .chart-area{
  padding: 14px 16px 20px;
+ overflow: visible;
 }
 
 #chart{
-    overflow: hidden;
+    overflow: visible;
   display:block;
   width:100%;
   /* JS가 높이를 강제로 넣으므로 height는 JS에 맡겨도 됨 */
