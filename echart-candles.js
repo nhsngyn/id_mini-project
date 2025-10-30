@@ -180,7 +180,7 @@
     const v = params.find(p => p.seriesName === 'Volume');
     if (!k) return '';
 
-    const [open, close, low, high] = k.data.map(Number);
+    const [,open, close, low, high] = k.data.map(Number);
     const volume = v ? Number(v.data) : null;
     const isUp = close >= open;
     const valColor = isUp ? 'var(--green_light, #4FF68C)' : 'var(--red_light, #FF3B52)';
@@ -372,7 +372,7 @@ chart.on('updateAxisPointer', (e) => {
 
   // 점선 라인을 High에 고정
   chart.setOption({
-    series: [{ id: 'price', markLine: { data: [{ yAxis: high }] } }]
+    series: [{ id: 'price', markLine: { data: [{ yAxis: open }] } }]
   }, false);
 
   // y배지 위치도 High로 강제 스냅
