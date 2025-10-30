@@ -113,11 +113,17 @@
           axisLine: { lineStyle: { color: '#2b323a' } },
           axisTick: { show: false },
           axisLabel: {
-            show: true, color: '#7f8ea1',
-            formatter: (val) => {
-              const [y,m,d] = String(val).split(/[-/]/);
-              return `${d} ${MMM[(+m||1)-1]||''}`;
-            }
+    show: true,
+    color: '#7f8ea1',
+    interval: function (index, value) {
+      // 7일 간격마다 표시
+      return index % 7 === 0;
+    },
+    formatter: (val) => {
+      const [y,m,d] = String(val).split(/[-/]/);
+      const MMM=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return `${d} ${MMM[(+m||1)-1]||''}`;
+    }
           },
           axisPointer: {
             show: true, type: 'shadow',
@@ -152,59 +158,92 @@
       ],
 
       // ✅ 호버 카드 (상승=초록, 하락=빨강, VOLUME 포함)
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'cross', snap: true },
-        backgroundColor: 'rgba(0,0,0,0)',
-        borderWidth: 0,
-        padding: 0,
-        extraCssText: 'z-index:9999;box-shadow:none;padding:0;border:none;filter:drop-shadow(0 10px 30px rgba(0,0,0,0.35));',
-        formatter: function (params) {
-          const k = params.find(p => p.seriesType === 'candlestick');
-          const v = params.find(p => p.seriesName === 'Volume');
-          if (!k) return '';
-          const [open, close, low, high] = k.data.map(Number);
-          const volume = v ? Number(v.data) : null;
+    tooltip: {
+  trigger: 'axis',
+  confine: true,                  // 가장자리 잘림 방지
+  axisPointer: { type: 'cross', snap: true },
+  backgroundColor: 'transparent', // 카드 자체를 HTML로 그림
+  borderWidth: 0,
+  padding: 0,
+  formatter: function (params) {
+    const k = params.find(p => p.seriesType === 'candlestick');
+    const v = params.find(p => p.seriesName === 'Volume');
+    if (!k) return '';
 
-          const isUp = close >= open;
-          const valColor = isUp ? '#3ED598' : '#F76E6E';
-          const labelColor = '#C2C6CD';
-          const faded = '#A3AEC2';
-          const fmt = n => (Number.isFinite(n) ? n.toFixed(3) : '-');
-          const fmtVol = n => {
-            if (!Number.isFinite(n)) return '—';
-            if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
-            if (n >= 1e6) return (n / 1e6).toFixed(0) + 'M';
-            if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
-            return String(n);
-          };
+    const [open, close, low, high] = k.data.map(Number);
+    const volume = v ? Number(v.data) : null;
+    const isUp = close >= open;
+    const valColor = isUp ? 'var(--green_light, #4FF68C)' : 'var(--red_light, #FF3B52);';
 
-          const label = k.axisValueLabel || k.axisValue || '';
-          const [dateStr, timeStrFull] = String(label).split(/[ T]/);
-          const timeStr = timeStrFull ? timeStrFull.slice(0,5) : '09:00';
+    const fmt    = n => (Number.isFinite(n) ? n.toFixed(3) : '-');
+    const fmtVol = n => {
+      if (!Number.isFinite(n)) return '—';
+      if (n >= 1e9) return (n/1e9).toFixed(1)+'B';
+      if (n >= 1e6) return (n/1e6).toFixed(0)+'M';
+      if (n >= 1e3) return (n/1e3).toFixed(0)+'K';
+      return String(n);
+    };
 
-          return `
+    const label = k.axisValueLabel || k.axisValue || '';
+    const [dateStr, timeStrFull] = String(label).split(/[ T]/);
+    const timeStr = timeStrFull ? timeStrFull.slice(0,5) : '09:00';
+
+    // 공통 행 컴포넌트: 좌 라벨, 우 값
+    const row = (name, value, extraTop = false) => `
+      <div style="display:flex; width:100%; justify-content:space-between; align-items:center; ${extraTop ? 'margin-top:6px;' : ''}">
+        <span style="color:var(--gray100,#E4E6ED); font-family:Poppins; font-size:16px; font-weight:400; line-height:normal;">
+          ${name}
+        </span>
+        <span style="color:${valColor}; text-align:right; font-family:Poppins; font-size:16px; font-weight:500; line-height:normal; letter-spacing:0.32px;">
+          ${value}
+        </span>
+      </div>`;
+
+    return `
 <div style="
-  min-width:200px;padding:14px 16px;border-radius:12px;
-  background: rgba(61,66,77,0.95);
-  border: 1px solid rgba(255,255,255,0.06);
-  color:#E6EBF2;font-size:12px;line-height:1.35;">
-  <div style="display:flex;justify-content:space-between;margin-bottom:10px;color:${faded};font-weight:600">
-    <span>${dateStr || ''}</span><span>${timeStr}</span>
+  display:flex; width:179px; padding:12px 20px;
+  flex-direction:column; justify-content:center; align-items:flex-start; gap:6px;
+  border-radius:6px;
+  background: var(--gray-80, rgba(46,46,52,0.80));
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+">
+  <!-- 날짜 / 시간 -->
+  <div style="display:flex; width:100%; justify-content:space-between; align-items:center;
+              color:var(--gray300,#818D9C);
+              font-family:Poppins; font-size:12px; font-weight:400; line-height:normal; letter-spacing:0.24px;">
+    <span>${dateStr || ''}</span>
+    <span>${timeStr}</span>
   </div>
-  <div style="display:grid;grid-template-columns:1fr auto;row-gap:6px;column-gap:12px;">
-    <span style="color:${labelColor}">OPEN</span>   <span style="text-align:right;color:${valColor}">${fmt(open)}</span>
-    <span style="color:${labelColor}">HIGH</span>   <span style="text-align:right;color:${valColor}">${fmt(high)}</span>
-    <span style="color:${labelColor}">LOW</span>    <span style="text-align:right;color:${valColor}">${fmt(low)}</span>
-    <span style="color:${labelColor}">CLOSE</span>  <span style="text-align:right;color:${valColor}">${fmt(close)}</span>
-    ${volume != null ? `
-      <span style="color:${labelColor};margin-top:6px;">VOLUME</span>
-      <span style="text-align:right;color:${valColor};margin-top:6px;">${fmtVol(volume)}</span>
-    ` : ''}
+
+  ${row('OPEN',  fmt(open))}
+  ${row('HIGH',  fmt(high))}
+  ${row('LOW',   fmt(low))}
+  ${row('CLOSE', fmt(close))}
+ ${volume != null ? `
+  <div style="display:flex; width:100%; justify-content:space-between; align-items:center; margin-top:6px;">
+    <span style="color:var(--gray100,#E4E6ED);
+                 font-family:Poppins;
+                 font-size:16px;
+                 font-weight:600;
+                 line-height:normal;
+                 letter-spacing:0.32px;">
+      VOLUME
+    </span>
+    <span style="color:${valColor};
+                 text-align:right;
+                 font-family:Poppins;
+                 font-size:16px;
+                 font-weight:600;
+                 line-height:normal;
+                 letter-spacing:0.32px;">
+      ${fmtVol(volume)}
+    </span>
   </div>
+` : ''}
 </div>`;
-        }
-      },
+  }
+},
+
 
       // ✅ 스크롤/슬라이더/휠줌 모두 비활성화
       dataZoom: [],
