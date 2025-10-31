@@ -351,8 +351,7 @@ chart.on('updateAxisPointer', (e) => {
   if (xAxisModel) {
     const idxExtent = xAxisModel.axis.scale.getExtent();
     const pxExtent  = xAxisModel.axis.getExtent();
-    const barW = Math.max(
-      6,
+    const barW = Math.max(6,
       Math.min(20, Math.abs(pxExtent[1] - pxExtent[0]) / Math.max(1, idxExtent[1] - idxExtent[0]))
     );
     chart.setOption({ xAxis: [{ axisPointer: { lineStyle: { width: barW } } }] }, false);
@@ -370,14 +369,14 @@ chart.on('updateAxisPointer', (e) => {
 
   const high = k[3];
 
-  // 점선 라인을 High에 고정
+  // 점선 라인을 open에 고정
   chart.setOption({
     series: [{ id: 'price', markLine: { data: [{ yAxis: open }] } }]
   }, false);
 
-  // y배지 위치도 High로 강제 스냅
+  // y배지 위치도 open로 강제 스냅
   const xPx = chart.convertToPixel({ xAxisIndex: 0 }, idx);
-  const yPx = chart.convertToPixel({ gridIndex: 0, yAxisIndex: 0 }, high);
+  const yPx = chart.convertToPixel({ gridIndex: 0, yAxisIndex: 0 }, open);
 
   syncing = true;
   chart.dispatchAction({
