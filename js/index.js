@@ -62,7 +62,9 @@ async function loadAndRender(assetKey) {
       updateVolumeWindow(state.charts.volume, state.data, state.window);
     }
 
-    if ($badge) $badge.textContent = 'Full Range';
+    if ($badge) {
+  $badge.textContent = '60 Days (25/08/18–10/16)';
+}
     console.log('[index] init/render done');
     
   } catch (e) {
