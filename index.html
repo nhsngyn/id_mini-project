@@ -1,68 +1,190 @@
+<!-- index.html -->
+
 <!DOCTYPE html>
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Price & Volume Dashboard</title>
-    <link rel="icon" href="data:,">
-    <!-- 경로 수정 -->
-    <link rel="stylesheet" href="styles/style.css" />
-    <!-- ECharts via CDN -->
+    <link rel="icon" href="data:," />
+    <!-- Poppins -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // 다크 팔레트가 잘 드러나도록 기본 설정
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              black: "#13151A",
+              panel: "#181A20",
+              gray800: "#21252C",
+              gray30: "rgba(55,60,66,0.30)",
+              text: "#E7E7EA",
+              muted: "#A6A7AB",
+              accent: "#00FFCC",
+            },
+            fontFamily: {
+              sans: ["Poppins", "system-ui", "-apple-system", "sans-serif"],
+            },
+            spacing: {
+              "price-w": "1316px",
+              "price-h": "470px",
+              "volume-h": "120px",
+              "divider-w": "1408px",
+            },
+            borderRadius: { "card-t": "10px", "card-b": "10px" },
+          },
+        },
+      };
+    </script>
+    <!-- ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   </head>
 
- <body>
-  <div class="app">
-    <header>
-      <h1>Price & Volume</h1>
+  <body class="min-h-dvh bg-black text-text font-sans antialiased">
+    <div class="mx-auto max-w-[1440px]">
+      <!-- 로딩 표시 -->
+      <div id="loading" class="flex justify-center items-center py-8">
+        <svg
+          class="animate-spin h-5 w-5 text-accent"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            class="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            stroke-width="4"
+          />
+          <path
+            class="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8v8z"
+          />
+        </svg>
+        <span class="ml-2 text-muted">데이터를 불러오는 중...</span>
       </div>
-    </header>
 
-<!-- 컨트롤 섹션 -->
-<section class="controls" role="region" aria-labelledby="controls-title">
-  <h2 id="controls-title" class="sr-only">차트 컨트롤</h2>
+      <!-- 헤더 (64px) -->
+      <header
+        class="flex items-center gap-2 h-16 px-4 border-b border-gray800 bg-panel"
+      >
+        <h1 class="m-0 text-[24px] font-semibold tracking-[-0.02em]">
+          Price &amp; Volume
+        </h1>
+      </header>
 
-  <div class="control-flex">
-    <!-- 좌측: 드롭다운 -->
-    <div class="left-controls">
-      <label for="asset-select" class="sr-only">자산 선택</label>
-      <div class="select">
-        <select id="asset-select" name="asset">
-          <option value="mantra" selected>Mantra</option>
-          <option value="stock-a">Stock A</option>
-          <option value="stock-b">Stock B</option>
-          <option value="crypto-c">Crypto C</option>
-        </select>
-      </div>
+      <!-- 컨트롤 바 (80px) -->
+      <section
+        class="h-20 bg-black"
+        role="region"
+        aria-labelledby="controls-title"
+      >
+        <h2 id="controls-title" class="sr-only">차트 컨트롤</h2>
+
+        <div class="h-20 flex items-center justify-between gap-3 px-4">
+          <!-- 좌측: 드롭다운 -->
+          <div class="relative w-[281px] h-12">
+            <label for="asset-select" class="sr-only">자산 선택</label>
+
+            <select
+              id="asset-select"
+              name="asset"
+              class="appearance-none w-full h-12 px-4 pr-11 rounded-lg border border-gray800 bg-panel text-[15px] outline-none focus:border-accent focus:ring-0 focus:shadow-[0_0_0_3px_rgba(0,255,204,0.18)] cursor-pointer"
+            >
+              <option value="mantra" selected>Mantra</option>
+              <option value="stock-a">Stock A</option>
+              <option value="stock-b">Stock B</option>
+              <option value="crypto-c">Crypto C</option>
+            </select>
+
+            <!-- 커스텀 화살표 -->
+            <span
+              aria-hidden="true"
+              class="pointer-events-none absolute right-[14px] top-1/2 -translate-y-1/2 h-4 w-4 opacity-90 bg-[url('../image/icn_arrow_btm_24.png')] bg-center bg-contain bg-no-repeat"
+            ></span>
+          </div>
+
+          <!-- 우측: 메타 카드 -->
+          <div
+            class="ml-auto my-[10px] mt-4 flex flex-col items-start justify-center gap-2 rounded-lg border border-gray800 bg-panel px-4 py-2"
+            role="group"
+            aria-labelledby="chart-meta-title"
+          >
+            <h2 id="chart-meta-title" class="sr-only">차트 메타 정보</h2>
+
+            <div class="flex w-full items-center gap-1.5">
+              <img
+                src="./image/icn_candle_16.png"
+                alt=""
+                class="h-[14px] w-[14px] opacity-85"
+              />
+              <span
+                class="min-w-[70px] text-[13px] font-normal text-gray700 text-left"
+                >Timeframe</span
+              >
+              <span
+                id="badge-interval"
+                class="text-[12px] font-normal tracking-[0.24px] text-gray400 text-left"
+                >1 Day</span
+              >
+            </div>
+
+            <div class="flex w-full items-center gap-1.5">
+              <img
+                src="./image/icn_range_16.png"
+                alt=""
+                class="h-[14px] w-[14px] opacity-85"
+              />
+              <span
+                class="min-w-[70px] text-[13px] font-normal text-gray700 text-left"
+                >Range</span
+              >
+              <span
+                id="badge-range"
+                class="text-[12px] font-normal tracking-[0.24px] text-gray400 text-left"
+              >
+                60 Days (25/08/18-10/16)
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 메인(차트) -->
+      <main class="py-5">
+        <div
+          class="container mx-auto px-4 max-w-[1316px] w-full flex flex-col items-center gap-0 my-[14px] mb-5"
+        >
+          <!-- 가격 차트 -->
+          <div
+            class="w-[1316px] h-[470px] bg-black rounded-t-card-t overflow-hidden mb-[10px]"
+          >
+            <div id="priceChart" class="h-full w-full"></div>
+          </div>
+
+          <!-- 구분선 -->
+          <div class="w-[1408px] h-px bg-gray30 mx-auto"></div>
+
+          <!-- 거래량 차트 -->
+          <div
+            class="w-[1316px] h-[120px] bg-black rounded-b-card-b overflow-hidden mt-[18px]"
+          >
+            <div id="volumeChart" class="h-full w-full"></div>
+          </div>
+        </div>
+      </main>
     </div>
 
-    <!-- 우측: 카드 -->
-    <div class="right-controls" role="group" aria-labelledby="chart-meta-title">
-      <h2 id="chart-meta-title" class="sr-only">차트 메타 정보</h2>
-
-      <div class="meta">
-        <img src="./image/icn_candle_16.png" alt="" />
-        <span class="meta-title">Timeframe</span>
-        <span class="meta-value" id="badge-interval">1 Day</span>
-      </div>
-
-      <div class="meta">
-        <img src="./image/icn_range_16.png" alt="" />
-        <span class="meta-title">Range</span>
-        <span class="meta-value" id="badge-range">60 Days (25/08/18-10/16)</span>
-      </div>
-    </div>
-  </div>
-</section>
-
-    <!-- 메인 차트 영역: 가격 + 거래량 -->
-    <main>
-      <div class="chart-wrap">
-        <div class="chart-price"><div id="priceChart"></div></div>
-         <div class="chart-divider"></div> <!-- 구분선 -->
-        <div class="chart-volume"><div id="volumeChart"></div></div>
-      </div>
-    </main>
+    <!-- 모듈 스크립트 -->
     <script type="module" src="./js/index.js"></script>
   </body>
 </html>
