@@ -88,30 +88,9 @@
         role="region"
         aria-labelledby="controls-title"
       >
-        <h2 id="controls-title" class="sr-only">차트 컨트롤</h2>
-
         <div class="h-20 flex items-center justify-between gap-3 px-4">
-          <!-- 좌측: 드롭다운 -->
-          <div class="relative w-[281px] h-12">
-            <label for="asset-select" class="sr-only">자산 선택</label>
-
-            <select
-              id="asset-select"
-              name="asset"
-              class="appearance-none w-full h-12 px-4 pr-11 rounded-lg border border-gray800 bg-panel text-[15px] outline-none focus:border-accent focus:ring-0 focus:shadow-[0_0_0_3px_rgba(0,255,204,0.18)] cursor-pointer"
-            >
-              <option value="mantra" selected>Mantra</option>
-              <option value="stock-a">Stock A</option>
-              <option value="stock-b">Stock B</option>
-              <option value="crypto-c">Crypto C</option>
-            </select>
-
-            <!-- 커스텀 화살표 -->
-            <span
-              aria-hidden="true"
-              class="pointer-events-none absolute right-[14px] top-1/2 -translate-y-1/2 h-4 w-4 opacity-90 bg-[url('../image/icn_arrow_btm_24.png')] bg-center bg-contain bg-no-repeat"
-            ></span>
-          </div>
+          <!-- 드롭다운 위치 -->
+          <div id="dropdown-container" class="relative w-[281px] h-12"></div>
 
           <!-- 우측: 메타 카드 -->
           <div
